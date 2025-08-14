@@ -1,5 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+// src/app.controller.ts
+import { BadRequestException, Controller, Get, Query } from '@nestjs/common';
 import { AppService } from './app.service';
+import { LiveIndicatorResponse } from './util/liveindicator.response';
 
 @Controller('stock-server')
 export class AppController {
@@ -11,10 +13,10 @@ export class AppController {
     @Query('interval') interval: string,
     @Query('dataAggregation') dataAggregation: string,
     @Query('indicatorType') indicatorType: string,
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ): Promise<any> {
-    return await this.appService.getStockPriceInfo({
+    @Query('startDate') startDate: string, // YYYY-MM-DD
+    @Query('endDate') endDate: string,     // YYYY-MM-DD
+  ): Promise<LiveIndicatorResponse> {
+    return this.appService.getStockPriceInfo({
       indicatorId,
       interval,
       dataAggregation,
