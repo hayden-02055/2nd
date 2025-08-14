@@ -14,38 +14,23 @@ export class AppService {
 
   async getStockPriceInfo(params: Params): Promise<any> {
     try {
-      const useNewSpec = !!params.indicatorId;
+      const beginBasDt: string = this.toYYYYMMDD(params.startDate);
+      const endBasDt: string = this.toYYYYMMDD(params.endDate);
 
-      const beginBasDt = 
-        params.beginBasDt ?? this.toYYYYMMDD(params.startDate);
-      const endBasDt = 
-        params.endBasDt ?? this.toYYYYMMDD(params.endDate);
-
-      const query = useNewSpec
-        ? {
-            // 새 포맷: 6개 쿼리를 그대로 보냄
-            indicatorId: params.indicatorId!,
-            interval: params.interval!,
-            dataAggregation: params.dataAggregation!,
-            indicatorType: params.indicatorType!,
-            startDate: params.startDate!,
-            endDate: params.endDate!,
-          }
-        
+      const query = {
+        serviceKey: this.serviceKey,
+        resultType: 'json',
+        likeSrtnCd: params.indicatorId,
+        beginBasDt: beginBasDt,
+        endBasDt: endBasDt,
+      };
 
       // 실제 HTTP 요청 보내기(axios 사용)
       const resp = await this.httpService.axiosRef.get(this.baseUrl, {
         params: query,
       });
 
-      if (useNewSpec) {
-        return resp.data;
-      }
-
-      // -------------------------------------------------------------------
-      
-      //수정
-      const body: any = resp.data?.body ?? resp.data?.response?.body;
+      const body: any = resp.data?.body;
       const totalCount = Number(body?.totalCount ?? 0); // 총 개수
 
       const raw = body?.items?.item;
@@ -67,7 +52,7 @@ export class AppService {
       // - 날짜: basDt(YYYYMMDD)를 예쁘게 'YYYY-MM-DD'로 바꿈
       // - 값: clpr(종가)를 숫자로 변환(없으면 0)
       const values = list.map((it) => ({
-        date: this.Date(it.basDt), // 예: '20250811' → '2025-08-11'
+        date: this.date(it.basDt), // 예: '20250811' → '2025-08-11'
         value: Number(it.clpr) || 0, // 문자열 → 숫자. 실패하면 0.
       }));
 
@@ -80,21 +65,20 @@ export class AppService {
 
       //결과 돌려주기
       return response;
-    } 
-    
-    catch (error: any) {
+    } catch (error: any) {
       throw new Error(`API 호출 실패: ${error?.message ?? error}`);
     }
   }
 
   //날짜 성형
-  private Date(d?: string) {
+  private date(d?: string) {
     if (!d || d.length !== 8) return d ?? '';
     return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
   }
-  private toYYYYMMDD(d?: string) {
-    if (!d) return undefined;
+
+  private toYYYYMMDD(d?: string): string {
+    if (!d) return '';
     const s = d.replaceAll('-', '');
-    return /^\d{8}$/.test(s) ? s : undefined;
+    return /^\d{8}$/.test(s) ? s : '';
   }
 }
