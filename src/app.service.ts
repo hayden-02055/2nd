@@ -14,71 +14,66 @@ export class AppService {
 
   async getStockPriceInfo(params: Params): Promise<any> {
     try {
-      const beginBasDt: string = this.toYYYYMMDD(params.startDate);
-      const endBasDt: string = this.toYYYYMMDD(params.endDate);
+      // 컨트롤러에서 YYYY-MM-DD로 들어온다고 가정
+      const beginBasDt: string = this.formatDate2(params.startDate);
+      const endBasDt: string = this.formatDate2(params.endDate);
 
       const query = {
         serviceKey: this.serviceKey,
         resultType: 'json',
         likeSrtnCd: params.indicatorId,
-        beginBasDt: beginBasDt,
-        endBasDt: endBasDt,
+        beginBasDt,
+        endBasDt,
       };
 
-      // 실제 HTTP 요청 보내기(axios 사용)
       const resp = await this.httpService.axiosRef.get(this.baseUrl, {
         params: query,
       });
 
       const body: any = resp.data?.body;
-      const totalCount = Number(body?.totalCount ?? 0); // 총 개수
+      const totalCount = Number(body?.totalCount ?? 0);
 
-      const raw = body?.items?.item;
-      const list: any[] = Array.isArray(raw) ? raw : raw ? [raw] : [];
+      const list : any[] = ([] as any[]).concat(body?.items?.item ?? []);
 
-      // indicator(추가 가능)
       const head = list[0];
       const indicator = head
         ? {
             indicatorType: 'stock' as const,
-            symbol: head.srtnCd, // 단축코드
-            name: head.itmsNm, // 종목명
+            symbol: head.srtnCd,
+            name: head.itmsNm,
             currency: 'KRW',
-            exchange: head.mrktCtg, // 거래소
+            exchange: head.mrktCtg,
           }
         : null;
 
-      // values: 날짜와 값(종가)만 뽑아서 새 배열 만들기
-      // - 날짜: basDt(YYYYMMDD)를 예쁘게 'YYYY-MM-DD'로 바꿈
-      // - 값: clpr(종가)를 숫자로 변환(없으면 0)
       const values = list.map((it) => ({
-        date: this.date(it.basDt), // 예: '20250811' → '2025-08-11'
-        value: Number(it.clpr) || 0, // 문자열 → 숫자. 실패하면 0.
+        date: this.formatDate1(it.basDt), 
+        value: Number(it.clpr) || 0,
       }));
 
       values.sort((a, b) => a.date.localeCompare(b.date));
 
-      // 최종 결과를 정해진 모양으로 조립
       const response: LiveIndicatorResponse = { indicator, totalCount, values };
-
       console.log(response);
-
-      //결과 돌려주기
       return response;
     } catch (error: any) {
       throw new Error(`API 호출 실패: ${error?.message ?? error}`);
     }
   }
 
-  //날짜 성형
-  private date(d?: string) {
-    if (!d || d.length !== 8) return d ?? '';
-    return `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+  // YYYYMMDD -> YYYY-MM-DD 
+  private formatDate1(d?: string): string {
+    return d ? [d.slice(0, 4), d.slice(4, 6), d.slice(6, 8)].join('-') : '';
   }
 
-  private toYYYYMMDD(d?: string): string {
+  //YYYY-MM-DD -> YYYYMMDD
+  private formatDate2(d? : string) : string {
     if (!d) return '';
-    const s = d.replaceAll('-', '');
-    return /^\d{8}$/.test(s) ? s : '';
-  }
+    let out = '';
+    for (let i = 0; i < d.length && out.length < 8; i++){
+      const c = d.charCodeAt(i);
+      if (c >= 48 && c <= 57) out += d[i];
+    }
+    return out.length === 8 ? out : '';
+  } 
 }
