@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { LiveIndicatorResponse } from './util/liveindicator.response';
 import { HttpService } from '@nestjs/axios';
 import { Params } from './util/param';
@@ -12,68 +12,62 @@ export class AppService {
 
   constructor(private readonly httpService: HttpService) {}
 
-  async getStockPriceInfo(params: Params): Promise<any> {
-    try {
-      // 컨트롤러에서 YYYY-MM-DD로 들어온다고 가정
-      const beginBasDt: string = this.formatDate2(params.startDate);
-      const endBasDt: string = this.formatDate2(params.endDate);
+  async getStockPriceInfo(params: Params): Promise<LiveIndicatorResponse> {
+    // 컨트롤러에서 YYYY-MM-DD로 들어온다고 가정
+    const beginBasDt: string = this.dateToBasicIso(new Date(params.startDate));
+    const endBasDt: string = this.dateToBasicIso(new Date(params.endDate));
 
-      const query = {
-        serviceKey: this.serviceKey,
-        resultType: 'json',
-        likeSrtnCd: params.indicatorId,
-        beginBasDt,
-        endBasDt,
-      };
+    const query = {
+      serviceKey: this.serviceKey,
+      resultType: 'json',
+      likeSrtnCd: params.indicatorId,
+      beginBasDt,
+      endBasDt,
+    };
 
-      const resp = await this.httpService.axiosRef.get(this.baseUrl, {
-        params: query,
+    const resp = await this.httpService.axiosRef.get(this.baseUrl, {
+      params: query,
+    });
+
+    const body: any = resp.data.response.body;
+    const totalCount = Number(body?.totalCount);
+    if (totalCount === 0) {
+      throw new BadRequestException({
+        error: '[ERROR] 받아온 주식 데이터가 존재하지 않습니다.',
+        message: '받아온 주식 데이터가 존재하지 않습니다.',
       });
-
-      const body: any = resp.data?.body;
-      const totalCount = Number(body?.totalCount ?? 0);
-
-      const list : any[] = ([] as any[]).concat(body?.items?.item ?? []);
-
-      const head = list[0];
-      const indicator = head
-        ? {
-            indicatorType: 'stock' as const,
-            symbol: head.srtnCd,
-            name: head.itmsNm,
-            currency: 'KRW',
-            exchange: head.mrktCtg,
-          }
-        : null;
-
-      const values = list.map((it) => ({
-        date: this.formatDate1(it.basDt), 
-        value: Number(it.clpr) || 0,
-      }));
-
-      values.sort((a, b) => a.date.localeCompare(b.date));
-
-      const response: LiveIndicatorResponse = { indicator, totalCount, values };
-      console.log(response);
-      return response;
-    } catch (error: any) {
-      throw new Error(`API 호출 실패: ${error?.message ?? error}`);
     }
+
+    const list: any[] = body?.items?.item;
+    const head = list[0];
+    const indicator = {
+      indicatorType: 'stock' as const,
+      symbol: head.srtnCd,
+      name: head.itmsNm,
+      currency: 'KRW',
+      exchange: head.mrktCtg,
+    };
+
+    const values = list.map((it) => ({
+      date: this.basicIsoToDate(it.basDt).toISOString().split('T')[0],
+      value: Number(it.clpr) || 0,
+    }));
+
+    values.sort((a, b) => a.date.localeCompare(b.date));
+    return { indicator, totalCount, values };
   }
 
-  // YYYYMMDD -> YYYY-MM-DD 
-  private formatDate1(d?: string): string {
-    return d ? [d.slice(0, 4), d.slice(4, 6), d.slice(6, 8)].join('-') : '';
+  // YYYYMMDD -> YYYY-MM-DD
+  private basicIsoToDate(d: string): Date {
+    return new Date([d.slice(0, 4), d.slice(4, 6), d.slice(6, 8)].join('-'));
   }
 
   //YYYY-MM-DD -> YYYYMMDD
-  private formatDate2(d? : string) : string {
-    if (!d) return '';
-    let out = '';
-    for (let i = 0; i < d.length && out.length < 8; i++){
-      const c = d.charCodeAt(i);
-      if (c >= 48 && c <= 57) out += d[i];
-    }
-    return out.length === 8 ? out : '';
-  } 
+  private dateToBasicIso(d: Date): string {
+    return (
+      d.getFullYear().toString() +
+      (d.getMonth() + 1).toString().padStart(2, '0') +
+      d.getDate().toString().padStart(2, '0')
+    );
+  }
 }
