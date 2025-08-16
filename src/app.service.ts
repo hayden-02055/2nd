@@ -24,19 +24,27 @@ export class AppService {
       beginBasDt,
       endBasDt,
     };
+    //totalCount 호출: numOfRows=0, pageNo=0
+    const resqCount = await this.httpService.axiosRef.get(this.baseUrl, {
+    params: { ...query, numOfRows: 0, pageNo: 0 },
+    });
 
+    const countBody: any = resqCount.data.response.body;
+    const totalCount = Number(countBody?.totalCount) || 0;
+
+    if (totalCount <= 0) {
+      throw new BadRequestException({
+      error: '[ERROR] 받아온 주식 데이터가 존재하지 않습니다.',
+      message: '받아온 주식 데이터가 존재하지 않습니다.',
+      });
+    }
+
+    //totalCount만큼 요청
     const resp = await this.httpService.axiosRef.get(this.baseUrl, {
-      params: query,
+    params: { ...query, numOfRows: totalCount, pageNo: 1 },
     });
 
     const body: any = resp.data.response.body;
-    const totalCount = Number(body?.totalCount);
-    if (totalCount === 0) {
-      throw new BadRequestException({
-        error: '[ERROR] 받아온 주식 데이터가 존재하지 않습니다.',
-        message: '받아온 주식 데이터가 존재하지 않습니다.',
-      });
-    }
 
     const list: any[] = body?.items?.item;
     const head = list[0];
